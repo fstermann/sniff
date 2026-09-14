@@ -6,10 +6,24 @@ an LLM adjudicates those candidates and checks contextual rules that cannot be e
 as patterns.
 
 Rule slugs remain readable and configurable, while stable Ruff-style codes make findings easy to
-scan and reference:
+scan and reference. A confirmed finding includes its source excerpt and diagnosis:
 
 ```text
+ ___ _  _ ___ ___ ___
+/ __| \| |_ _| __| __|
+\__ \ .` || || _|| _|
+|___/_|\_|___|_| |_|
+
+1 finding across 1 file
+
+prompt.md:2
 　　[WARNING LOG010] log-universal-quantifier · via LLM
+
+    │   1 │ Review the text.
+    │ › 2 │ Must always apply.
+    │     │ ^^^^^^^^^^^^^^^^^^
+
+　　└── The scope is unbounded.
 ```
 
 ## Installation
