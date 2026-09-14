@@ -1,0 +1,18 @@
+{
+  "name": "sniff",
+  "owner": {
+    "name": "fstermann"
+  },
+  "metadata": {
+    "description": "sniff: text and prompt defect review",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "sniff",
+      "source": "./",
+      "description": "Deterministic + LLM review of prompts, specs, docs, and code comments. Flags ambiguity, contradiction, unverifiable requirements, and related defects.",
+      "version": "0.1.0"
+    }
+  ]
+}
