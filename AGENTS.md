@@ -8,7 +8,7 @@ candidates, `rules` emits the semantic rule bundle, and `report` renders confirm
 - Keep user-facing installation, usage, configuration, and rule-schema documentation in
   `README.md`.
 - Keep runtime instructions in `SKILL.md` and maintainer guidance here.
-- Run tests with `cargo test` and check formatting with `cargo fmt --check`.
+- Run tests with `cargo test` and run quality gates with `pre-commit run --all-files`.
 - Keep the launcher, CLI, and bundled rule registry version-aligned.
 
 ## Invariants

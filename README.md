@@ -176,8 +176,12 @@ Run the tests with:
 
 ```sh
 cargo test
-cargo fmt --check
+pre-commit run --all-files
 ```
+
+Install the local commit gate with `pre-commit install`. It checks repository hygiene, Rust
+formatting, and Clippy; GitHub Actions runs the same configuration and tests on Linux, macOS, and
+Windows.
 
 Contributor guidance lives in [AGENTS.md](AGENTS.md). Detector certification evidence lives in
 [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md); the separate downstream-effect experiment is
