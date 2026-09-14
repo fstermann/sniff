@@ -28,13 +28,14 @@ prompt.md:2
 
 ## Installation
 
-The launcher uses the skill-local virtual environment when present:
+Build and install the native Rust binary:
 
 ```sh
-uv sync --project .
+cargo install --path .
 ```
 
-[Vale](https://vale.sh/) is required for prose detectors. Other adapters, currently Ruff, are
+No Python installation or virtual environment is required. [Vale](https://vale.sh/) is required
+for prose detectors. Other adapters, currently Ruff, are
 required only when a selected rule uses them; a selected adapter that is disabled or unavailable
 is an error.
 
@@ -174,7 +175,8 @@ rule also needs an LLM sniffer unless it declares `llm_exempt: true`.
 Run the tests with:
 
 ```sh
-uv run --project . python -m unittest discover -s tests
+cargo test
+cargo fmt --check
 ```
 
 Contributor guidance lives in [AGENTS.md](AGENTS.md). Detector certification evidence lives in

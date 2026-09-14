@@ -20,7 +20,8 @@ Project-defined profiles may also exist in `sniff.toml`.
 
 ## Run a sniff
 
-The bundled CLI launcher is `${CLAUDE_PLUGIN_ROOT}/sniff`.
+The bundled launcher resolves the native Rust CLI. Release installations may also invoke `sniff`
+directly from `PATH`.
 
 1. Run deterministic detectors and read their JSONL candidates:
 

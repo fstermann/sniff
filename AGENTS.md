@@ -8,7 +8,7 @@ candidates, `rules` emits the semantic rule bundle, and `report` renders confirm
 - Keep user-facing installation, usage, configuration, and rule-schema documentation in
   `README.md`.
 - Keep runtime instructions in `SKILL.md` and maintainer guidance here.
-- Run tests with `uv run --project . python -m unittest discover -s tests`.
+- Run tests with `cargo test` and check formatting with `cargo fmt --check`.
 - Keep the launcher, CLI, and bundled rule registry version-aligned.
 
 ## Invariants
@@ -17,7 +17,7 @@ candidates, `rules` emits the semantic rule bundle, and `report` renders confirm
 - Every selected LLM rule is evaluated, including rules that also have a deterministic detector.
 - The rule registry and layered configuration own severity; the LLM never changes it.
 - `--fix` applies only detector-declared safe fixes. It never applies unsafe or LLM-authored edits.
-- The report renderer owns presentation. Change formatting in `src/sniff/report.py` and its
+- The report renderer owns presentation. Change formatting in `rust/report.rs` and its
   tests, not in `SKILL.md`.
 - Detector failures are errors, not silently reduced coverage.
 
