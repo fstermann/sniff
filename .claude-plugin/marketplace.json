@@ -1,8 +1,7 @@
 {
   "name": "sniff",
   "owner": {
-    "name": "fstermann",
-    "email": "fabian.stermann@gmail.com"
+    "name": "fstermann"
   },
   "metadata": {
     "description": "sniff: text and prompt defect review",
