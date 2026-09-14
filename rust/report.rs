@@ -206,6 +206,26 @@ fn location(f: &ReportFinding, root: &Path, markdown: bool) -> String {
         format!("{}:{}", label, f.line)
     }
 }
+fn rendered_message(message: &str, markdown: bool) -> String {
+    message
+        .split('\n')
+        .flat_map(|paragraph| wrap(paragraph).into_iter().map(|(_, line)| line))
+        .enumerate()
+        .map(|(index, line)| {
+            let prefix = if index == 0 {
+                format!("{INDENT}└── ")
+            } else {
+                format!("{INDENT}    ")
+            };
+            if markdown {
+                format!("{prefix}*{}*", line.replace('*', "\\*").replace('_', "\\_"))
+            } else {
+                format!("{prefix}{line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 pub fn render(
     findings: &[ReportFinding],
     root: &Path,
@@ -273,10 +293,10 @@ pub fn render(
             };
             if markdown {
                 out.push_str(&format!(
-                    "\n{marker}**{label}** · *via {}*\n\n```text\n{}\n```\n\n{INDENT}└── *{}*",
+                    "\n{marker}**{label}** · *via {}*\n\n```text\n{}\n```\n\n{}",
                     provenance(&f.source).unwrap(),
                     excerpt(f, root).join("\n"),
-                    f.message.replace('*', "\\*").replace('_', "\\_")
+                    rendered_message(&f.message, true)
                 ));
             } else {
                 let styled = if color {
@@ -285,13 +305,84 @@ pub fn render(
                     label
                 };
                 out.push_str(&format!(
-                    "\n{marker}{styled} · via {}\n\n{}\n\n{INDENT}└── {}",
+                    "\n{marker}{styled} · via {}\n\n{}\n\n{}",
                     provenance(&f.source).unwrap(),
                     excerpt(f, root).join("\n"),
-                    f.message
+                    rendered_message(&f.message, false)
                 ));
             }
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload(source: &str) -> String {
+        format!(
+            r#"{{"path":"prompt.md","line":1,"column":1,"rule":"test-rule","code":"TST001","severity":"warning","source":"{source}","span":"Must","message":"Unbounded."}}"#
+        )
+    }
+
+    #[test]
+    fn rejects_bad_json_code_severity_and_unconfirmed_source() {
+        assert!(
+            parse("not json", true)
+                .unwrap_err()
+                .to_string()
+                .contains("input line 1")
+        );
+        assert!(
+            parse(&payload("vale candidate"), true)
+                .unwrap_err()
+                .to_string()
+                .contains("invalid source")
+        );
+        let bad_code = payload("llm only").replace("TST001", "bad");
+        assert!(
+            parse(&bad_code, true)
+                .unwrap_err()
+                .to_string()
+                .contains("rule code")
+        );
+        let bad_severity = payload("llm only").replace("warning", "fatal");
+        assert!(parse(&bad_severity, true).is_err());
+    }
+
+    #[test]
+    fn defaults_end_positions_and_renders_both_formats() {
+        let findings = parse(&payload("llm only"), true).unwrap();
+        assert_eq!(findings[0].end_line, Some(1));
+        assert_eq!(findings[0].end_column, Some(5));
+        let terminal = render(&findings, Path::new("."), "finding", false, false);
+        assert!(terminal.contains("[WARNING TST001] test-rule · via LLM"));
+        assert!(terminal.contains("^^^^"));
+        let markdown = render(&findings, Path::new("."), "finding", true, false);
+        assert!(markdown.contains("**[WARNING TST001] test-rule**"));
+        assert!(markdown.contains("```text"));
+    }
+
+    #[test]
+    fn empty_reports_distinguish_candidates_and_findings() {
+        assert_eq!(
+            render(&[], Path::new("."), "finding", false, false),
+            "sniff: no confirmed findings"
+        );
+        assert_eq!(
+            render(&[], Path::new("."), "candidate", false, false),
+            "sniff: no candidates"
+        );
+    }
+
+    #[test]
+    fn long_diagnoses_use_a_hanging_indent() {
+        let message = "The allowed degree of editing is not defined, so different tools can make materially different changes while claiming to clean the reports lightly.";
+        let rendered = rendered_message(message, false);
+        let lines: Vec<_> = rendered.lines().collect();
+        assert!(lines.len() > 1);
+        assert!(lines[0].starts_with("　　└── "));
+        assert!(lines[1].starts_with("　　    "));
+    }
 }

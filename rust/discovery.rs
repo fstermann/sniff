@@ -71,3 +71,88 @@ pub fn discover(
     }
     Ok(found.into_iter().collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn profile(include: &[&str], exclude: &[&str]) -> toml::map::Map<String, toml::Value> {
+        let mut value = toml::map::Map::new();
+        value.insert(
+            "include".into(),
+            toml::Value::Array(
+                include
+                    .iter()
+                    .map(|x| toml::Value::String((*x).into()))
+                    .collect(),
+            ),
+        );
+        value.insert(
+            "exclude".into(),
+            toml::Value::Array(
+                exclude
+                    .iter()
+                    .map(|x| toml::Value::String((*x).into()))
+                    .collect(),
+            ),
+        );
+        value
+    }
+
+    #[test]
+    fn discovers_matching_files_and_honors_ignores() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("keep.md"), "keep").unwrap();
+        fs::write(temp.path().join("skip.txt"), "skip").unwrap();
+        fs::write(temp.path().join("ignored.md"), "ignored").unwrap();
+        fs::write(temp.path().join(".gitignore"), "ignored.md\n").unwrap();
+        fs::create_dir(temp.path().join(".git")).unwrap();
+        let found = discover(
+            &[temp.path().display().to_string()],
+            &profile(&["*.md", "**/*.md"], &[]),
+            temp.path(),
+        )
+        .unwrap();
+        assert_eq!(
+            found,
+            vec![temp.path().join("keep.md").canonicalize().unwrap()]
+        );
+    }
+
+    #[test]
+    fn explicit_ignored_file_is_included_but_wrong_type_is_not() {
+        let temp = tempfile::tempdir().unwrap();
+        let markdown = temp.path().join("ignored.md");
+        let python = temp.path().join("source.py");
+        fs::write(&markdown, "text").unwrap();
+        fs::write(&python, "text").unwrap();
+        let profile = profile(&["*.md"], &["*"]);
+        assert_eq!(
+            discover(&[markdown.display().to_string()], &profile, temp.path())
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(
+            discover(&[python.display().to_string()], &profile, temp.path())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn rejects_missing_inputs_and_invalid_globs() {
+        assert!(
+            discover(
+                &["missing-file".into()],
+                &profile(&["*"], &[]),
+                Path::new(".")
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("no such input")
+        );
+        assert!(discover(&[], &profile(&["["], &[]), Path::new(".")).is_err());
+    }
+}

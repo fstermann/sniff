@@ -12,6 +12,13 @@ use std::{
 static BUNDLED: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/rules");
 
 fn parse(source: &str, text: &str, stem: &str) -> Result<Rule> {
+    let normalized;
+    let text = if text.contains("\r\n") {
+        normalized = text.replace("\r\n", "\n");
+        normalized.as_str()
+    } else {
+        text
+    };
     let rest = text
         .strip_prefix("---\n")
         .ok_or_else(|| message(format!("{source}: rule must start with YAML frontmatter")))?;
@@ -247,4 +254,59 @@ pub fn severity(rule: &Rule, data: &toml::Value, profile: &str) -> Result<Severi
             .ok_or_else(|| message(format!("{}: invalid effective severity {x:?}", rule.id)))?
     };
     Ok(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rule_text(newline: &str) -> String {
+        [
+            "---",
+            "id: test-rule",
+            "code: TST001",
+            "name: Test rule",
+            "family: test",
+            "applies_to: [core]",
+            "severity: warning",
+            "message: Test message.",
+            "sniffers:",
+            "  - kind: llm",
+            "---",
+            "Test guidance.",
+        ]
+        .join(newline)
+    }
+
+    #[test]
+    fn accepts_lf_and_crlf_frontmatter() {
+        for newline in ["\n", "\r\n"] {
+            let rule = parse("test-rule.md", &rule_text(newline), "test-rule").unwrap();
+            assert_eq!(rule.code, "TST001");
+            assert_eq!(rule.body, "Test guidance.");
+        }
+    }
+
+    #[test]
+    fn rejects_filename_mismatch_and_missing_llm() {
+        let error = parse("other.md", &rule_text("\n"), "other").unwrap_err();
+        assert!(error.to_string().contains("filename stem"));
+        let without_llm = rule_text("\n").replace("kind: llm", "kind: vale\n    pattern: text");
+        assert!(
+            parse("test-rule.md", &without_llm, "test-rule")
+                .unwrap_err()
+                .to_string()
+                .contains("llm sniffer")
+        );
+    }
+
+    #[test]
+    fn effective_severity_obeys_profile_then_rule_override() {
+        let rule = parse("test-rule.md", &rule_text("\n"), "test-rule").unwrap();
+        let data: toml::Value = toml::from_str("[profiles.spec.severity]\ntest-rule = 'error'\n[rules.test-rule]\nseverity = 'suggestion'\n").unwrap();
+        assert_eq!(
+            severity(&rule, &data, "spec").unwrap(),
+            Severity::Suggestion
+        );
+    }
 }

@@ -151,5 +151,143 @@ fn validate(data: &toml::Value) -> Result<()> {
     {
         return Err(message("fail_on must be suggestion, warning, or error"));
     }
+    for (name, profile) in profiles {
+        let profile = profile
+            .as_table()
+            .ok_or_else(|| message(format!("profiles.{name} must be a table")))?;
+        for key in [
+            "tags",
+            "include",
+            "exclude",
+            "include_rules",
+            "exclude_rules",
+        ] {
+            if let Some(value) = profile.get(key) {
+                if !value
+                    .as_array()
+                    .is_some_and(|items| items.iter().all(|item| item.is_str()))
+                {
+                    return Err(message(format!(
+                        "profiles.{name}.{key} must be a list of strings"
+                    )));
+                }
+            }
+        }
+        if let Some(levels) = profile.get("severity") {
+            if !levels.as_table().is_some_and(|values| {
+                values.values().all(|value| {
+                    value
+                        .as_str()
+                        .and_then(crate::models::Severity::parse)
+                        .is_some()
+                })
+            }) {
+                return Err(message(format!(
+                    "profiles.{name}.severity contains an invalid level"
+                )));
+            }
+        }
+    }
+    if let Some(overrides) = data.get("rules") {
+        let overrides = overrides
+            .as_table()
+            .ok_or_else(|| message("rules must be a table"))?;
+        for (id, value) in overrides {
+            let value = value
+                .as_table()
+                .ok_or_else(|| message(format!("rules.{id} must be a table")))?;
+            if value.get("enabled").is_some_and(|v| !v.is_bool()) {
+                return Err(message(format!("rules.{id}.enabled must be true or false")));
+            }
+            if value.get("severity").is_some_and(|v| {
+                v.as_str()
+                    .and_then(crate::models::Severity::parse)
+                    .is_none()
+            }) {
+                return Err(message(format!(
+                    "rules.{id}.severity contains an invalid level"
+                )));
+            }
+        }
+    }
+    if let Some(adapters) = data.get("adapters") {
+        let adapters = adapters
+            .as_table()
+            .ok_or_else(|| message("adapters must be a table"))?;
+        for (name, value) in adapters {
+            let value = value
+                .as_table()
+                .ok_or_else(|| message(format!("adapters.{name} must be a table")))?;
+            if value.get("enabled").is_some_and(|v| !v.is_bool()) {
+                return Err(message(format!(
+                    "adapters.{name}.enabled must be true or false"
+                )));
+            }
+            if value.get("executable").is_some_and(|v| !v.is_str()) {
+                return Err(message(format!(
+                    "adapters.{name}.executable must be a string"
+                )));
+            }
+        }
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recursively_merges_tables_extends_lists_and_replaces_scalars() {
+        let mut base: toml::Value =
+            toml::from_str("items=['base']\n[nested]\nenabled=true\nseverity='warning'").unwrap();
+        let overlay: toml::Value =
+            toml::from_str("items=['base','project']\n[nested]\nseverity='error'").unwrap();
+        merge(&mut base, overlay);
+        assert_eq!(base["items"].as_array().unwrap().len(), 2);
+        assert_eq!(base["nested"]["enabled"].as_bool(), Some(true));
+        assert_eq!(base["nested"]["severity"].as_str(), Some("error"));
+    }
+
+    #[test]
+    fn rejects_unknown_default_profile_and_failure_level() {
+        let bad_profile: toml::Value =
+            toml::from_str("default_profile='missing'\n[profiles.document]").unwrap();
+        assert!(
+            validate(&bad_profile)
+                .unwrap_err()
+                .to_string()
+                .contains("unknown profile")
+        );
+        let bad_level: toml::Value =
+            toml::from_str("default_profile='document'\nfail_on='fatal'\n[profiles.document]")
+                .unwrap();
+        assert!(
+            validate(&bad_level)
+                .unwrap_err()
+                .to_string()
+                .contains("fail_on")
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_profile_rule_and_adapter_values() {
+        for (text, expected) in [
+            (
+                "default_profile='document'\n[profiles.document]\ninclude='*.md'",
+                "list of strings",
+            ),
+            (
+                "default_profile='document'\n[profiles.document]\n[rules.test]\nenabled='yes'",
+                "true or false",
+            ),
+            (
+                "default_profile='document'\n[profiles.document]\n[adapters.vale]\nexecutable=42",
+                "must be a string",
+            ),
+        ] {
+            let value: toml::Value = toml::from_str(text).unwrap();
+            assert!(validate(&value).unwrap_err().to_string().contains(expected));
+        }
+    }
 }

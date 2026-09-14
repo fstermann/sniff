@@ -92,6 +92,17 @@ fn run_vale(
     let mut native = BTreeMap::new();
     for r in &applicable {
         let patterns = ystr(r, "vale", "pattern");
+        let vale = r.sniffers("vale").next().unwrap();
+        let ignorecase = vale
+            .options
+            .get("ignorecase")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let scope = vale
+            .options
+            .get("scope")
+            .and_then(|value| value.as_str())
+            .unwrap_or("text");
         let raw = patterns
             .iter()
             .map(|x| format!("  - {}", serde_yaml_ng::to_string(x).unwrap().trim()))
@@ -99,7 +110,7 @@ fn run_vale(
             .join("\n");
         let level = rules::severity(r, &ctx.data, profile)?.as_str();
         let payload = format!(
-            "extends: existence\nmessage: {}\nlevel: {level}\nignorecase: true\nscope: text\nraw:\n{raw}\n",
+            "extends: existence\nmessage: {}\nlevel: {level}\nignorecase: {ignorecase}\nscope: {scope}\nraw:\n{raw}\n",
             serde_yaml_ng::to_string(&r.message).unwrap().trim()
         );
         fs::write(style.join(format!("{}.yml", r.id)), payload)
@@ -290,4 +301,101 @@ fn run_ruff(
         }
     }
     Ok(found)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{RawSniffer, Severity};
+    use std::{collections::BTreeMap, fs};
+
+    fn context(executable: &Path) -> Context {
+        Context {
+            data: toml::from_str(&format!(
+                "[adapters.ruff]\nexecutable = {:?}",
+                executable.display().to_string()
+            ))
+            .unwrap(),
+            project_root: executable.parent().unwrap().to_path_buf(),
+            rule_dirs: vec![],
+        }
+    }
+
+    fn ruff_rule() -> Rule {
+        let mut options = BTreeMap::new();
+        options.insert(
+            "rule".into(),
+            serde_yaml_ng::Value::String("PLR1722".into()),
+        );
+        Rule {
+            id: "test-ruff".into(),
+            code: "TST001".into(),
+            name: "Test".into(),
+            family: "test".into(),
+            applies_to: vec!["code".into()],
+            severity: Severity::Warning,
+            message: "Test message.".into(),
+            body: "Guidance".into(),
+            source: "test".into(),
+            sniffers: vec![RawSniffer {
+                kind: "ruff".into(),
+                options,
+            }],
+            fix: "safe".into(),
+            evidence: String::new(),
+            llm_exempt: true,
+        }
+    }
+
+    #[test]
+    fn disabled_and_missing_adapters_are_errors() {
+        let disabled = Context {
+            data: toml::from_str("[adapters.vale]\nenabled=false").unwrap(),
+            project_root: ".".into(),
+            rule_dirs: vec![],
+        };
+        assert!(
+            executable(&disabled, "vale")
+                .unwrap_err()
+                .to_string()
+                .contains("disabled")
+        );
+        let missing = Context {
+            data: toml::from_str("[adapters.vale]\nexecutable='definitely-not-an-executable'")
+                .unwrap(),
+            project_root: ".".into(),
+            rule_dirs: vec![],
+        };
+        assert!(
+            executable(&missing, "vale")
+                .unwrap_err()
+                .to_string()
+                .contains("unavailable")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ruff_output_is_normalized_and_safe_fix_flags_are_forwarded() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("sample.py");
+        let fake = temp.path().join("ruff");
+        let marker = temp.path().join("args");
+        fs::write(&target, "exit()\n").unwrap();
+        fs::write(&fake,format!("#!/bin/sh\nprintf '%s' \"$*\" > {:?}\nprintf '%s\\n' '[{{\"code\":\"PLR1722\",\"message\":\"Use sys.exit\",\"filename\":{:?},\"location\":{{\"row\":1,\"column\":1}},\"end_location\":{{\"row\":1,\"column\":5}}}},{{\"code\":\"F401\",\"filename\":{:?}}}]'\nexit 1\n",marker,target.display().to_string(),target.display().to_string())).unwrap();
+        let mut permissions = fs::metadata(&fake).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&fake, permissions).unwrap();
+        let rule = ruff_rule();
+        let ctx = context(&fake);
+        let findings =
+            run_ruff(std::slice::from_ref(&target), &[&rule], &ctx, "code", true).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].span, "exit");
+        assert_eq!(findings[0].detector, "ruff");
+        let args = fs::read_to_string(marker).unwrap();
+        assert!(args.contains("--fix"));
+        assert!(args.contains("--no-unsafe-fixes"));
+    }
 }
