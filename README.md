@@ -1,12 +1,21 @@
 # sniff
 
-`sniff` reviews prose and source-code text for ambiguity, contradiction, unverifiable
-requirements, missing context, and related defects. Deterministic detectors produce candidates;
-an LLM adjudicates those candidates and checks contextual rules that cannot be expressed reliably
-as patterns.
+`sniff` finds potential problems with linters, then checks whether they matter in
+context. It works on documents, prompts, specifications, comments, docstrings, and
+registered source-code rules.
 
-Rule slugs remain readable and configurable, while stable Ruff-style codes make findings easy to
-scan and reference. A confirmed finding includes its source excerpt and diagnosis:
+This avoids two bad outcomes: treating every pattern match as a real problem, or asking
+an LLM to review a project with no fixed rules. `sniff` uses both:
+
+1. Vale and Ruff find candidates.
+2. An LLM confirms or rejects those candidates and checks rules that need context.
+3. `sniff` renders the confirmed findings.
+
+The rule registry controls which checks run, their severity, and whether a fix is safe.
+The LLM cannot change those decisions. A detector failure is an error instead of a
+silent reduction in coverage.
+
+A confirmed finding looks like this:
 
 ```text
  ___ _  _ ___ ___ ___
@@ -26,70 +35,126 @@ prompt.md:2
 　　└── The scope is unbounded.
 ```
 
-## Installation
+## Install
 
-Build and install the native Rust binary:
+Release archives contain the `sniff` binary and a pinned Vale executable. Put both in
+the same directory on `PATH`:
+
+```sh
+sniff .
+```
+
+To build and install from source:
 
 ```sh
 cargo install --path .
 ```
 
-No Python installation or virtual environment is required. [Vale](https://vale.sh/) is required
-for prose detectors. Other adapters, currently Ruff, are
-required only when a selected rule uses them; a selected adapter that is disabled or unavailable
-is an error.
+No Python installation or virtual environment is required. A source installation
+needs [Vale](https://vale.sh/) installed separately. Select a specific Vale binary with
+`--vale <path>` or `SNIFF_VALE`. Release builds find their bundled Vale automatically.
 
-## Usage
+Other adapters, currently Ruff, are needed only when a selected rule uses them. If a
+required adapter is disabled or unavailable, the run fails.
 
-Run deterministic detectors:
+## Use
+
+Pass one or more files or directories to `sniff`:
 
 ```sh
-./sniff check <path...> --profile document
-./sniff check <path...> --profile spec --format report
-./sniff check <path...> --profile code --format jsonl
+sniff docs/ --profile document
+sniff requirements.md --profile spec --format report
+sniff src/ --profile code --format jsonl
 ```
 
-Pass `-` to inspect stdin. Explicit files are checked even when ignored; directory discovery uses
-tracked files plus untracked, non-ignored files. `--fix` applies detector-declared safe fixes and
-rechecks. It does not apply LLM-authored edits.
+The default input is the current directory. Pass `-` to read from stdin:
 
-The built-in profiles are:
+```sh
+printf '%s\n' 'The system should respond quickly.' | sniff - --profile spec
+```
 
-| Profile | Scope |
+Explicit files are checked even when ignored. Directory discovery checks tracked files
+and untracked files that are not ignored.
+
+### Profiles
+
+| Profile | Checks |
 |---|---|
 | `document` | Standalone prose and markup |
 | `prompt` | Prompts and agent instructions |
 | `spec` | Requirements and specifications |
-| `code` | Comments, docstrings, and registered code-linter rules |
+| `code` | Comments, docstrings, and registered source-code rules |
 | `all` | Every registered rule and supported input type |
 
-The skill's LLM workflow also uses these commands:
+Projects can define more profiles in `sniff.toml`.
+
+### Output and exit status
+
+The check command supports human-readable output, rendered reports, JSON, and JSONL:
 
 ```sh
-./sniff rules --target <path> --profile <profile>
-./sniff report --project-root <project-root>
+sniff . --format human
+sniff . --format report
+sniff . --format json
+sniff . --format jsonl
 ```
 
-`rules` emits the applicable semantic guidance. `report` reads confirmed JSONL findings on stdin
-and renders terminal or Markdown output. Its default format is Markdown in Claude Code and Codex,
-and colorized terminal output elsewhere. Use `--color auto|always|never` on `check` and `report`;
-automatic mode emits color only to a terminal. Run `./sniff <command> --help` for all options.
+Use `--color auto|always|never` to control terminal color. Automatic mode uses color
+only when stdout is a terminal. `NO_COLOR` is also respected.
 
-Exit status is `0` below the configured failure threshold, `1` when the threshold is reached, and
-`2` for invalid input, configuration, or detector failure. The default threshold is `error`.
+The exit status is:
 
-## Configuration
+| Status | Meaning |
+|---:|---|
+| `0` | No finding reached the configured failure threshold |
+| `1` | At least one finding reached the threshold |
+| `2` | Invalid input, invalid configuration, or detector failure |
 
-Configuration is optional and layers in this order:
+The default threshold is `error`. Override it with `--fail-on` or in configuration.
+
+Run `sniff --help` for the complete CLI. The older `sniff check` spelling remains
+available as a deprecated alias.
+
+### Fixes
+
+`--fix` applies only fixes that a detector declares safe, then checks the files again:
+
+```sh
+sniff docs/ --profile document --fix
+```
+
+It does not apply unsafe refactors or edits written by an LLM. It cannot modify stdin.
+
+## LLM workflow
+
+Running `sniff` directly produces detector candidates. An agent using the bundled skill
+completes the contextual review with two additional commands:
+
+```sh
+sniff rules --target <path> --profile <profile>
+sniff report --project-root <project-root>
+```
+
+`sniff rules` emits the selected semantic rules. The agent evaluates every emitted LLM
+rule, confirms or rejects detector candidates, and can find violations that a detector
+missed. A candidate is not a confirmed finding until this step is complete.
+
+`sniff report` reads confirmed JSONL findings from stdin and owns the final
+presentation. It renders Markdown by default in Claude Code and Codex, and terminal
+output elsewhere.
+
+## Configure
+
+Configuration is optional. `sniff` loads it in this order:
 
 1. Bundled defaults in `config/defaults.toml`.
-2. `$XDG_CONFIG_HOME/sniff/sniff.toml`, falling back to `~/.config/sniff/sniff.toml`.
-3. The nearest `sniff.toml` found by searching upward from the target to the Git root.
-4. CLI flags.
+2. `$XDG_CONFIG_HOME/sniff/sniff.toml`, or `~/.config/sniff/sniff.toml`.
+3. The nearest `sniff.toml`, searching from the target toward the Git root.
+4. Command-line flags.
 
-Mappings merge recursively, lists extend without duplicates, and scalar values override earlier
-values. Outside a Git repository, discovery searches upward and uses the nearest configuration.
-Use `--config <path>` to select a project configuration explicitly.
+Mappings merge recursively, lists extend without duplicates, and later scalar values
+replace earlier values. Outside a Git repository, discovery searches upward and uses
+the nearest configuration file. Pass `--config <path>` to choose one explicitly.
 
 ```toml
 version = 1
@@ -101,7 +166,7 @@ fail_on = "warning"
 exclude = ["vendor/**", "generated/**"]
 exclude_rules = ["lex-politeness-padding"]
 
-# Define a project-specific profile. Include `core` explicitly when wanted.
+# Define a project profile. Include `core` when its rules are wanted.
 [profiles.release-notes]
 tags = ["core", "document", "release-notes"]
 include = ["CHANGELOG.md", "docs/releases/**/*.md"]
@@ -109,7 +174,7 @@ exclude = []
 include_rules = []
 exclude_rules = []
 
-# Override rule policy without redefining detector behavior.
+# Change rule policy without redefining the detector.
 [rules.lex-subjective]
 enabled = false
 
@@ -125,16 +190,19 @@ enabled = true
 executable = "ruff"
 ```
 
-Valid severities are `suggestion`, `warning`, and `error`. Configuration owns effective severity;
-the LLM does not change it.
+Valid severities are `suggestion`, `warning`, and `error`. Configuration owns the
+effective severity; an LLM does not change it.
 
-### Custom rules
+## Add rules
 
-Place personal rules in `$XDG_CONFIG_HOME/sniff/rules/` (or `~/.config/sniff/rules/`) and project
-rules in `.sniff/rules/`. A custom rule extends the registry and cannot replace an existing rule.
-Rule IDs and codes must both be unique across all layers.
+Put personal rules in `$XDG_CONFIG_HOME/sniff/rules/` or
+`~/.config/sniff/rules/`. Put project rules in `.sniff/rules/`.
 
-Each `rules/<id>.md` contains YAML frontmatter and LLM guidance:
+Custom rules extend the registry; they cannot replace an existing rule. Each rule ID
+and code must be unique across the bundled, personal, and project layers.
+
+A rule is a Markdown file with YAML frontmatter followed by the guidance used during
+contextual review:
 
 ```markdown
 ---
@@ -157,7 +225,7 @@ sniffers:
     hook_safe: false
 ---
 
-What the smell is and why it matters.
+What the problem is and why it matters.
 
 Bad: An example violation.
 Good: A corrected example.
@@ -165,24 +233,41 @@ Good: A corrected example.
 Not a finding when: the contextual exclusions.
 ```
 
-The ID must match the filename stem. Codes use three uppercase family letters and three digits,
-such as `LEX005`; assign the next unused number and never renumber an existing rule. Vale sniffers
-require `pattern`, while Ruff sniffers require the native Ruff `rule` code. Every deterministic
-rule also needs an LLM sniffer unless it declares `llm_exempt: true`.
+The filename must be `<id>.md`. IDs use lowercase hyphenated names. Codes use three
+uppercase family letters and three digits, such as `LEX005`. Assign the next unused
+number and never renumber an existing rule.
 
-## Development and evaluation
+Vale sniffers require `pattern`. Ruff sniffers require the native Ruff `rule` code.
+Every deterministic rule also needs an LLM sniffer unless it sets `llm_exempt: true`.
 
-Run the tests with:
+`hook_safe` means a deterministic detector reached at least 0.90 precision over at
+least 25 hand-labelled candidates. It does not change severity or skip LLM evaluation.
+Record certification evidence in [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md).
+
+## Develop
+
+Run the test suite and quality gates:
 
 ```sh
 cargo test
 pre-commit run --all-files
 ```
 
-Install the local commit gate with `pre-commit install`. It checks repository hygiene, Rust
-formatting, and Clippy; GitHub Actions runs the same configuration and tests on Linux, macOS, and
-Windows.
+Install the local commit gate with:
 
-Contributor guidance lives in [AGENTS.md](AGENTS.md). Detector certification evidence lives in
-[eval/MEASUREMENTS.md](eval/MEASUREMENTS.md); the separate downstream-effect experiment is
+```sh
+pre-commit install
+```
+
+It checks repository hygiene, Rust formatting, and Clippy. GitHub Actions runs the same
+configuration and tests on Linux, macOS, and Windows.
+
+Releases are managed by Release Please from Conventional Commits. Configure a
+`RELEASE_PLEASE_TOKEN` repository secret when release PRs should trigger their own CI runs; the
+default `GITHUB_TOKEN` suppresses workflows caused by that token. Merging a release PR creates the
+tag and release, then packages the pinned Vale sidecar for Linux x86-64, macOS x86-64 and ARM64,
+and Windows x86-64.
+
+Maintainer guidance is in [AGENTS.md](AGENTS.md). Detector certification evidence is
+in [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md). The downstream-effect experiment is
 described in [eval/EVAL.md](eval/EVAL.md).

@@ -25,6 +25,20 @@ fn executable(ctx: &Context, kind: &str) -> Result<String> {
         .and_then(|x| x.get("executable"))
         .and_then(|x| x.as_str())
         .unwrap_or(kind);
+    if kind == "vale" && name == "vale" {
+        if let Some(path) = env::var_os("SNIFF_VALE").map(PathBuf::from) {
+            if path.is_file() {
+                return Ok(path.display().to_string());
+            }
+            return Err(message(format!(
+                "SNIFF_VALE points to an unavailable executable: {}",
+                path.display()
+            )));
+        }
+        if let Some(path) = bundled_vale() {
+            return Ok(path.display().to_string());
+        }
+    }
     if Path::new(name).components().count() > 1 && Path::new(name).is_file() {
         return Ok(name.into());
     }
@@ -46,6 +60,23 @@ fn executable(ctx: &Context, kind: &str) -> Result<String> {
             "required adapter {kind:?} is unavailable: install {name}"
         )))
     }
+}
+
+fn bundled_vale() -> Option<PathBuf> {
+    let executable = env::current_exe().ok()?;
+    let directory = executable.parent()?;
+    let filename = if cfg!(windows) { "vale.exe" } else { "vale" };
+    [
+        directory.join(filename),
+        directory.join("libexec").join("sniff").join(filename),
+        directory
+            .parent()?
+            .join("libexec")
+            .join("sniff")
+            .join(filename),
+    ]
+    .into_iter()
+    .find(|path| path.is_file() && path != &executable)
 }
 fn source_line(path: &str, line: usize) -> String {
     fs::read_to_string(path)

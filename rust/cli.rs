@@ -4,7 +4,7 @@ use crate::{
     models::{Finding, ReportFinding, Severity},
     report, rules,
 };
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::{
     env, fs,
     io::{self, IsTerminal, Read},
@@ -15,31 +15,38 @@ use std::{
     name = "sniff",
     version,
     about = "Find ambiguous, contradictory, and unverifiable writing.",
-    arg_required_else_help = true
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true
 )]
 struct Cli {
+    #[command(flatten)]
+    check: CheckArgs,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
+}
+#[derive(Args)]
+struct CheckArgs {
+    #[arg(default_value = ".", help = "Files, directories, or '-' for stdin.")]
+    paths: Vec<String>,
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    config: Option<PathBuf>,
+    #[arg(long = "format", value_enum, default_value = "human")]
+    format: CheckFormat,
+    #[arg(long,value_parser=["suggestion","warning","error"])]
+    fail_on: Option<String>,
+    #[arg(long)]
+    fix: bool,
+    #[arg(long, value_enum, default_value = "auto")]
+    color: Color,
+    #[arg(long, value_name = "PATH", help = "Override the Vale executable.")]
+    vale: Option<PathBuf>,
 }
 #[derive(Subcommand)]
 enum Command {
-    #[command(about = "Run registered deterministic detectors.")]
-    Check {
-        #[arg(required = true, help = "Files, directories, or '-' for stdin.")]
-        paths: Vec<String>,
-        #[arg(long)]
-        profile: Option<String>,
-        #[arg(long)]
-        config: Option<PathBuf>,
-        #[arg(long = "format", value_enum, default_value = "human")]
-        format: CheckFormat,
-        #[arg(long,value_parser=["suggestion","warning","error"])]
-        fail_on: Option<String>,
-        #[arg(long)]
-        fix: bool,
-        #[arg(long, value_enum, default_value = "auto")]
-        color: Color,
-    },
+    #[command(about = "Deprecated alias for the default deterministic check.")]
+    Check(CheckArgs),
     #[command(about = "Emit applicable LLM rule guidance.")]
     Rules {
         #[arg(long)]
@@ -109,34 +116,19 @@ fn start(paths: &[String]) -> PathBuf {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     let code = match cli.command {
-        Command::Check {
-            paths,
-            profile,
-            config,
-            format,
-            fail_on,
-            fix,
-            color,
-        } => check(
-            paths,
-            profile,
-            config,
-            format,
-            fail_on,
-            fix,
-            colored(&color),
-        )?,
-        Command::Rules {
+        Some(Command::Check(args)) => check(args)?,
+        Some(Command::Rules {
             profile,
             target,
             config,
             format,
-        } => emit_rules(profile, target, config, format)?,
-        Command::Report {
+        }) => emit_rules(profile, target, config, format)?,
+        Some(Command::Report {
             project_root,
             format,
             color,
-        } => render(project_root, format, colored(&color))?,
+        }) => render(project_root, format, colored(&color))?,
+        None => check(cli.check)?,
     };
     if code != 0 {
         std::process::exit(code)
@@ -157,15 +149,18 @@ fn profile<'a>(
         .ok_or_else(|| message(format!("unknown profile {name:?}")))?;
     Ok((name, p))
 }
-fn check(
-    paths: Vec<String>,
-    requested: Option<String>,
-    cfg: Option<PathBuf>,
-    format: CheckFormat,
-    fail: Option<String>,
-    fix: bool,
-    color: bool,
-) -> Result<i32> {
+fn check(args: CheckArgs) -> Result<i32> {
+    let CheckArgs {
+        paths,
+        profile: requested,
+        config: cfg,
+        format,
+        fail_on: fail,
+        fix,
+        color,
+        vale,
+    } = args;
+    let color = colored(&color);
     if paths.iter().filter(|x| x.as_str() == "-").count() > 1
         || paths.contains(&"-".into()) && paths.len() > 1
     {
@@ -174,7 +169,11 @@ fn check(
     if fix && paths.contains(&"-".into()) {
         return Err(message("--fix cannot modify stdin"));
     }
-    let ctx = config::load_config(&start(&paths), cfg.as_deref())?;
+    let mut ctx = config::load_config(&start(&paths), cfg.as_deref())?;
+    if let Some(path) = vale {
+        ctx.data["adapters"]["vale"]["executable"] =
+            toml::Value::String(path.display().to_string());
+    }
     let (name, p) = profile(&ctx.data, requested.as_deref())?;
     let all = rules::load(&ctx)?;
     let selected = rules::selected(&all, &ctx.data, name)?;

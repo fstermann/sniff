@@ -76,6 +76,19 @@ fn explicit_file_respects_profile_types() {
 }
 
 #[test]
+fn bare_command_runs_the_deterministic_check() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source.py");
+    fs::write(&source, "# prose\n").unwrap();
+    Command::cargo_bin("sniff")
+        .unwrap()
+        .args([source.to_str().unwrap(), "--profile", "document"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("0 files selected"));
+}
+
+#[test]
 fn invalid_input_uses_exit_two() {
     Command::cargo_bin("sniff")
         .unwrap()
