@@ -157,12 +157,12 @@ jobs:
           end
           EOF
 
-          if git -C tap diff --quiet -- Formula/sniff.rb; then
+          git -C tap add Formula/sniff.rb
+          if git -C tap diff --cached --quiet -- Formula/sniff.rb; then
             echo "Formula already at ${version} with these checksums."
             exit 0
           fi
           git -C tap config user.name "github-actions[bot]"
           git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C tap add Formula/sniff.rb
           git -C tap commit -m "chore: update sniff to ${version}"
           git -C tap push
