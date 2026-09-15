@@ -22,3 +22,5 @@ Copy-Item (Get-ChildItem "$Staging/vale" -Recurse -Filter vale.exe | Select-Obje
 Copy-Item LICENSE "$Output/LICENSE-sniff"
 Invoke-WebRequest "https://raw.githubusercontent.com/vale-cli/vale/v${ValeVersion}/LICENSE" -OutFile "$Output/LICENSE-vale"
 Compress-Archive "$Output" "$Package.zip"
+$Hash = (Get-FileHash "$Package.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+"$Hash  $Package.zip" | Set-Content -NoNewline "$Package.zip.sha256"

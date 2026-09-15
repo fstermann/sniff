@@ -30,3 +30,4 @@ curl --fail --location --silent --show-error \
   "https://raw.githubusercontent.com/vale-cli/vale/v${VALE_VERSION}/LICENSE" \
   --output "$STAGING/$PACKAGE/LICENSE-vale"
 tar -czf "$PACKAGE.tar.gz" -C "$STAGING" "$PACKAGE"
+shasum -a 256 "$PACKAGE.tar.gz" > "$PACKAGE.tar.gz.sha256"

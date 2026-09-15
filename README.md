@@ -37,8 +37,20 @@ prompt.md:2
 
 ## Install
 
-Release archives contain the `sniff` binary and a pinned Vale executable. Put both in
-the same directory on `PATH`:
+On macOS or Linux, the installer downloads and verifies the release for your platform,
+then installs `sniff` and its private Vale runtime under `~/.local/bin`:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fstermann/sniff/releases/latest/download/install.sh | sh
+```
+
+There is no archive extraction or manual `chmod` step. Use `SNIFF_INSTALL_DIR` to
+choose another binary directory, or pass `--version 0.1.0` when running a downloaded
+copy of the installer.
+
+Release archives are also available for manual and Windows installations. They contain
+the `sniff` binary, a pinned Vale executable, both licenses, and a SHA-256 checksum.
+Keep `sniff` and Vale in the archive's original layout and put `sniff` on `PATH`:
 
 ```sh
 sniff .
