@@ -1,6 +1,6 @@
 {
   "name": "sniff",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Deterministic + LLM review of prompts, specs, docs, and code comments. Flags ambiguity, contradiction, unverifiable requirements, and related defects.",
   "author": {
     "name": "fstermann"
