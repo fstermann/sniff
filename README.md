@@ -282,6 +282,8 @@ pre-commit install
 It checks repository hygiene, Rust formatting, and Clippy. GitHub Actions runs the same
 configuration and tests on Linux, macOS, and Windows.
 
-Maintainer guidance is in [AGENTS.md](AGENTS.md). Detector certification evidence is
-in [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md). The downstream-effect experiment is
-described in [eval/EVAL.md](eval/EVAL.md).
+Further project documentation:
+
+- Maintainer guidance: [AGENTS.md](AGENTS.md)
+- Detector certification evidence: [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md)
+- Downstream-effect experiment: [eval/EVAL.md](eval/EVAL.md)
