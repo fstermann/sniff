@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$ValeVersion = if ($env:VALE_VERSION) { $env:VALE_VERSION } else { "3.17.0" }
+$ValeVersion = if ($env:VALE_VERSION) { $env:VALE_VERSION } else { "3.21.0" }
 $Target = $args[0]
 $Platform = $args[1]
 $ValeAsset = "vale_${ValeVersion}_Windows_64-bit.zip"

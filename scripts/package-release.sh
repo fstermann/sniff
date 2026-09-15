@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VALE_VERSION="${VALE_VERSION:-3.17.0}"
+VALE_VERSION="${VALE_VERSION:-3.21.0}"
 TARGET="$1"
 PLATFORM="$2"
 VALE_ASSET="vale_${VALE_VERSION}_$3"

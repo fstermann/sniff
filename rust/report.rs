@@ -80,13 +80,12 @@ fn wrap(text: &str) -> Vec<(usize, String)> {
     while start < chars.len() {
         let limit = (start + WIDTH).min(chars.len());
         let mut end = limit;
-        if limit < chars.len() {
-            if let Some(i) = chars[start + WIDTH / 2..=limit]
+        if limit < chars.len()
+            && let Some(i) = chars[start + WIDTH / 2..=limit]
                 .iter()
                 .rposition(|c| *c == ' ')
-            {
-                end = start + WIDTH / 2 + i
-            }
+        {
+            end = start + WIDTH / 2 + i
         }
         out.push((
             start,
