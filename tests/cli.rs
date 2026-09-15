@@ -17,7 +17,7 @@ fn exposes_the_public_commands_and_version() {
         .arg("--version")
         .assert()
         .success()
-        .stdout("sniff 0.1.0\n");
+        .stdout(format!("sniff {}\n", env!("CARGO_PKG_VERSION")));
 }
 
 #[test]
