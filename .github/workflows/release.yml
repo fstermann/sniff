@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+      version:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package
+        type: string
+        required: true
+      version:
+        description: Release version without the v prefix
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  VALE_VERSION: "3.17.0"
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+
+jobs:
+  package-unix:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+            vale: Linux_64-bit.tar.gz
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            platform: macos-x86_64
+            vale: macOS_64-bit.tar.gz
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            platform: macos-aarch64
+            vale: macOS_arm64.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: scripts/package-release.sh "${{ matrix.target }}" "${{ matrix.platform }}" "${{ matrix.vale }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: |
+            sniff-*.tar.gz
+            sniff-*.tar.gz.sha256
+
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/package-release.ps1 x86_64-pc-windows-msvc windows-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: |
+            sniff-*.zip
+            sniff-*.zip.sha256
+
+  publish:
+    needs: [package-unix, package-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/sniff-*
+            install.sh
+          generate_release_notes: true
+
+      # Keep the tap in step with releases created by Release Please. Homebrew
+      # owns Vale for this installation path; the bundled copy in the archive is
+      # intentionally not installed by the formula.
+      - name: Update the Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "RELEASE_PLEASE_TOKEN not set — skipping formula update." >&2
+            exit 0
+          fi
+
+          version="${RELEASE_VERSION#v}"
+          linux_sha=$(cut -d' ' -f1 "dist/sniff-${version}-linux-x86_64.tar.gz.sha256")
+          macos_intel_sha=$(cut -d' ' -f1 "dist/sniff-${version}-macos-x86_64.tar.gz.sha256")
+          macos_arm_sha=$(cut -d' ' -f1 "dist/sniff-${version}-macos-aarch64.tar.gz.sha256")
+
+          git clone --depth 1 \
+            "https://x-access-token:${TAP_TOKEN}@github.com/fstermann/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cat > tap/Formula/sniff.rb <<EOF
+          class Sniff < Formula
+            desc "Find ambiguous, contradictory, and unverifiable writing"
+            homepage "https://github.com/fstermann/sniff"
+            version "${version}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/fstermann/sniff/releases/download/v${version}/sniff-${version}-macos-aarch64.tar.gz"
+                sha256 "${macos_arm_sha}"
+              else
+                url "https://github.com/fstermann/sniff/releases/download/v${version}/sniff-${version}-macos-x86_64.tar.gz"
+                sha256 "${macos_intel_sha}"
+              end
+            end
+
+            on_linux do
+              url "https://github.com/fstermann/sniff/releases/download/v${version}/sniff-${version}-linux-x86_64.tar.gz"
+              sha256 "${linux_sha}"
+            end
+
+            depends_on "vale"
+
+            def install
+              bin.install "sniff"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/sniff --version")
+            end
+          end
+          EOF
+
+          if git -C tap diff --quiet -- Formula/sniff.rb; then
+            echo "Formula already at ${version} with these checksums."
+            exit 0
+          fi
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C tap add Formula/sniff.rb
+          git -C tap commit -m "chore: update sniff to ${version}"
+          git -C tap push

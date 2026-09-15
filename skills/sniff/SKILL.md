@@ -20,12 +20,12 @@ Project-defined profiles may also exist in `sniff.toml`.
 
 ## Run a sniff
 
-The bundled CLI launcher is `${CLAUDE_PLUGIN_ROOT}/sniff`.
+The native `sniff` CLI must be available on `PATH`.
 
 1. Run deterministic detectors and read their JSONL candidates:
 
    ```sh
-   ${CLAUDE_PLUGIN_ROOT}/sniff check <path...> --profile <profile> --format jsonl
+   sniff <path...> --profile <profile> --format jsonl
    ```
 
    For conversational text, pass it through stdin using `-`; do not persist it. Use `--fix` only
@@ -34,7 +34,7 @@ The bundled CLI launcher is `${CLAUDE_PLUGIN_ROOT}/sniff`.
 2. Load the complete applicable LLM rule bundle:
 
    ```sh
-   ${CLAUDE_PLUGIN_ROOT}/sniff rules --target <path> --profile <profile>
+   sniff rules --target <path> --profile <profile>
    ```
 
    Omit `--target` for conversational stdin.
@@ -49,7 +49,7 @@ The bundled CLI launcher is `${CLAUDE_PLUGIN_ROOT}/sniff`.
 5. Send the confirmed findings as JSONL on stdin to:
 
    ```sh
-   ${CLAUDE_PLUGIN_ROOT}/sniff report --project-root <project-root>
+   sniff report --project-root <project-root>
    ```
 
    Each object requires `path`, `line`, `column`, `end_line`, `end_column`, `rule`, `code`,
