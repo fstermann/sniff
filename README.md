@@ -266,17 +266,17 @@ Record certification evidence in [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md).
 
 ## Develop
 
+Install the local commit gate:
+
+```sh
+pre-commit install
+```
+
 Run the test suite and quality gates:
 
 ```sh
 cargo test
 pre-commit run --all-files
-```
-
-Install the local commit gate with:
-
-```sh
-pre-commit install
 ```
 
 It checks repository hygiene, Rust formatting, and Clippy. GitHub Actions runs the same
