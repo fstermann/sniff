@@ -37,13 +37,15 @@ prompt.md:2
 
 ## Install
 
-With Homebrew on macOS or Linux:
+Homebrew is the recommended installation method on macOS or Linux:
 
 ```sh
 brew install fstermann/tap/sniff
 ```
 
-Homebrew installs and updates Vale as a declared dependency.
+The command adds the `fstermann/tap` tap automatically. Upgrade later with
+`brew upgrade sniff`. Homebrew installs and updates Vale as a declared dependency, so
+it does not need to be installed separately.
 
 On macOS or Linux, the installer downloads and verifies the release for your platform,
 then installs `sniff` and its private Vale runtime under `~/.local/bin`:
