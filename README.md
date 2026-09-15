@@ -70,9 +70,9 @@ To build and install from source:
 cargo install --path .
 ```
 
-No Python installation or virtual environment is required. A source installation
-needs [Vale](https://vale.sh/) installed separately. Select a specific Vale binary with
-`--vale <path>` or `SNIFF_VALE`. Release builds find their bundled Vale automatically.
+A source installation needs [Vale](https://vale.sh/) installed separately. Select a
+specific Vale binary with `--vale <path>` or `SNIFF_VALE`. Release builds find their
+bundled Vale automatically.
 
 Other adapters, currently Ruff, are needed only when a selected rule uses them. If a
 required adapter is disabled or unavailable, the run fails.
