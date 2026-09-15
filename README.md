@@ -282,12 +282,6 @@ pre-commit install
 It checks repository hygiene, Rust formatting, and Clippy. GitHub Actions runs the same
 configuration and tests on Linux, macOS, and Windows.
 
-Releases are managed by Release Please from Conventional Commits. Configure a
-`RELEASE_PLEASE_TOKEN` repository secret when release PRs should trigger their own CI runs; the
-default `GITHUB_TOKEN` suppresses workflows caused by that token. Merging a release PR creates the
-tag and release, then packages the pinned Vale sidecar for Linux x86-64, macOS x86-64 and ARM64,
-and Windows x86-64.
-
 Maintainer guidance is in [AGENTS.md](AGENTS.md). Detector certification evidence is
 in [eval/MEASUREMENTS.md](eval/MEASUREMENTS.md). The downstream-effect experiment is
 described in [eval/EVAL.md](eval/EVAL.md).
