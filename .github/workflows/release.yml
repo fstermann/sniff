@@ -24,6 +24,7 @@ permissions:
   contents: write
 
 env:
+  # renovate: datasource=github-releases depName=vale-cli/vale
   VALE_VERSION: "3.21.0"
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
   RELEASE_VERSION: ${{ inputs.version || github.ref_name }}

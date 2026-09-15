@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+# renovate: datasource=github-releases depName=vale-cli/vale
 $ValeVersion = if ($env:VALE_VERSION) { $env:VALE_VERSION } else { "3.21.0" }
 $Target = $args[0]
 $Platform = $args[1]

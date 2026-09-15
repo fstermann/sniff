@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# renovate: datasource=github-releases depName=vale-cli/vale
 VALE_VERSION="${VALE_VERSION:-3.21.0}"
 TARGET="$1"
 PLATFORM="$2"
