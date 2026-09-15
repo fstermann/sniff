@@ -162,30 +162,29 @@ fn validate(data: &toml::Value) -> Result<()> {
             "include_rules",
             "exclude_rules",
         ] {
-            if let Some(value) = profile.get(key) {
-                if !value
+            if let Some(value) = profile.get(key)
+                && !value
                     .as_array()
                     .is_some_and(|items| items.iter().all(|item| item.is_str()))
-                {
-                    return Err(message(format!(
-                        "profiles.{name}.{key} must be a list of strings"
-                    )));
-                }
+            {
+                return Err(message(format!(
+                    "profiles.{name}.{key} must be a list of strings"
+                )));
             }
         }
-        if let Some(levels) = profile.get("severity") {
-            if !levels.as_table().is_some_and(|values| {
+        if let Some(levels) = profile.get("severity")
+            && !levels.as_table().is_some_and(|values| {
                 values.values().all(|value| {
                     value
                         .as_str()
                         .and_then(crate::models::Severity::parse)
                         .is_some()
                 })
-            }) {
-                return Err(message(format!(
-                    "profiles.{name}.severity contains an invalid level"
-                )));
-            }
+            })
+        {
+            return Err(message(format!(
+                "profiles.{name}.severity contains an invalid level"
+            )));
         }
     }
     if let Some(overrides) = data.get("rules") {
