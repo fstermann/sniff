@@ -1,5 +1,8 @@
 # sniff
 
+Read the documentation and inspect the effective LLM rule bundles in the
+[interactive rule explorer](https://fstermann.github.io/sniff/rules/).
+
 `sniff` finds potential problems with linters, then checks whether they matter in
 context. It works on documents, prompts, specifications, comments, docstrings, and
 registered source-code rules.
